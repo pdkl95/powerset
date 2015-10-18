@@ -1,8 +1,18 @@
 #!/bin/sh
 
-max=
-sum=
-dosort=true
+########################
+###  Default Values  ###
+########################
+
+max_items=
+required_sum=
+skip_final_sort=false
+skip_empty_set=false
+
+
+###################################################
+###  Command line processing and documentation  ###
+###################################################
 
 show_help()
 {
@@ -12,7 +22,8 @@ show_help()
     echo "    -s, --sum <integer>     Only output subsets that sum to this value"
     echo "    -m, --max <maxitems>    Only output subsets with at MOST this many items"
     echo
-    echo "    -n, --nosort            Skip the final call to sort(1)"
+    echo "    --skip-sort             Skip the final call to sort(1)"
+    echo "    --skip-empty-set        Suppress the blank line of the empty set"
     echo
     echo "EXAMPLE"
     echo "    # basic usage, slow"
@@ -28,18 +39,19 @@ show_help()
 
 if command -v getopt 2>&1 >/dev/null ; then
     # have GNU getopt (allows nicer options)
-    SOPT="hnm:s:"
-    LOPT="help,nosort,max:,sum:"
+    SOPT="hm:s:"
+    LOPT="help,skip-final-sort,skip-empty-setmax:,sum:"
     OPTIONS=$(getopt -o "$SOPT" --long "$LOPT" -n "$SELFNAME" -- "$@") || exit 1
     eval set -- "$OPTIONS"
 fi
 
 while true ; do
     case "$1" in
-        -h | --help)   show_help    ;  exit 0 ;;
-        -m | --max)    max="$2"     ; shift 2 ;;
-        -s | --sum)    sum="$2"     ; shift 2 ;;
-        -n | --nosort) dosort=false ; shift   ;;
+        -h | --help)       show_help             ;  exit 0 ;;
+        -m | --max)        max_items="$2"        ; shift 2 ;;
+        -s | --sum)        required_sum="$2"     ; shift 2 ;;
+        --skip-final-sort) skip_final_sort=true  ; shift   ;;
+        --skip-empty-set)  skip_empty_set=true   ; shift   ;;
         --) shift ; break ;;
         -*) echo "bad option: $1" ; exit 1 ;;
         *)  break ;;
@@ -47,13 +59,17 @@ while true ; do
 done
 
 
-powerset()
+################################
+###  Power Set search space  ###
+################################
+
+basic_powerset()
 {
     if [ $# -eq 0 ] ; then
         echo
     else
         (   shift
-            powerset "$@"
+            basic_powerset "$@"
         ) | while read r; do
             echo "$1 $r"
             echo "$r"
@@ -61,19 +77,32 @@ powerset()
     fi
 }
 
-powerset_nonempty()
+powerset_without_empty_set()
 {
-    powerset "$@" | egrep -v "^$"
+    basic_powerset "$@" | egrep -v "^$"
 }
+
+powerset()
+{
+    if $skip_empty_set ; then
+        powerset_without_empty_set "$@"
+    else
+        basic_powerset "$@"
+    fi
+}
+
+###################################
+###  Filter - Maximum Set Size  ###
+###################################
 
 set_leq_max_items()
 {
-    [ $# -le $max ]
+    [ $# -le $max_items ]
 }
 
 filter_long_sets()
 {
-    if [ -z "$max" ] ; then
+    if [ -z "$max_items" ] ; then
         cat
     else
         while read line ; do
@@ -84,6 +113,12 @@ filter_long_sets()
     fi
 }
 
+
+#################################
+###  Filter - Arithmetic Sum  ###
+#################################
+
+# prints the sum of it's arguments
 sum()
 {
     x=0
@@ -98,15 +133,18 @@ sum()
     echo $x
 }
 
+# tests if a set's sum matches the required sum
 set_matches_sum()
 {
     cur=$(sum "$@")
-    [ $cur -eq $sum ]
+    [ $cur -eq $required_sum ]
 }
 
+# filters sets on STDIN, printing only 
+# the sets the match the required sum
 filter_by_sum()
 {
-    if [ -z "$sum" ] ; then
+    if [ -z "$required_sum" ] ; then
         cat
     else
         while read line ; do
@@ -117,25 +155,27 @@ filter_by_sum()
     fi
 }
 
+#############################################
+###  Building and formatting the resutls  ###
+#############################################
 
-filtered_powerset()
+unsorted_matching_sets()
 {
-    powerset_nonempty "$@" | filter_long_sets | filter_by_sum
+    powerset "$@" | filter_long_sets | filter_by_sum
 }
 
-unsorted_output()
+sorted_matching_sets()
 {
-    filtered_powerset "$@"
+    unsorted_matching_sets "$@" | sort -n
 }
 
-sorted_output()
-{
-    unsorted_output "$@" | sort -n
+subset_sum_output() {
+    if $skip_final_sort ; then
+        unsorted_matching_sets "$@"
+    else
+        sorted_matching_sets "$@"
+    fi
 }
 
-if $dosort ; then
-    sorted_output "$@"
-else
-    unsorted_output "$@"
-fi
+subset_sum_output "$@"
 

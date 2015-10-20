@@ -2,26 +2,43 @@
 ###  OPTIONS  ###
 #################
 
-######################
 ## First, the compiler
+#CC       = cc
+CC       = gcc
 
-# (choose one or setup your onw manually)
+# compiler options
+CFLAGS =
+# preprocesor options
+CPPFLAGS = 
+# linker options
+LDFLAGS = 
 
-# generic UNIX compiler with no assumptions
-#CC     = cc
-#CFLAGS =
-
-# GNU's C Compiler
-CC     = gcc
-CFLAGS = -Wall -Wextra
-
-#################
 ## Removing Files
 RM   = rm -v
 RM_F = $(RM) -f
 
+
+#######################
+###  COMPATABILITY  ###
+#######################
+
+## optionally use all compiler warnings?
+CFLAGS += -Wall
+
+## use extra non-standard warnings?
+ifeq ($(CC), gcc)
+  CFLAGS += -Wextra
+endif
+
+# comment this line to fix "stdbool.h" errors
+CPPFLAGS += -DHAVE_STDBOOL
+
+# comment this line to fix "_Bool" errors
+CPPFLAGS += -DHAVE__BOOL
+
+
 #####################
-###  END OPTIONS  ###
+###  BUILD RULES  ###
 #####################
 
 TARGETS = powerset
@@ -30,7 +47,7 @@ all: build
 build: $(TARGETS)
 
 powerset: powerset.c
-	$(CC) $(CFLAGS) -o powerset powerset.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o powerset powerset.c
 
 clean:
 	$(RM) $(TARGETS)

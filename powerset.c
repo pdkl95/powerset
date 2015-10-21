@@ -22,14 +22,28 @@ typedef bool _Bool;
 # endif
 #endif
 
+/* constants */
+#ifdef UINT_MAX
+# if UINT_MAX >= 2147483648
+#  define MAX_ITEM_LIMIT 31
+# else
+#  error "UINT_MAX < 2147483648"
+# endif
+#else
+# define MAX_ITEM_LIMIT 31
+#endif
+
 /* options */
 bool print_empty_set    = true;
 bool print_array_format = false;
 bool use_item_limit     = false;
 bool use_sum_filter     = false;
 
+/* global state */
 int  max_items    = 0;
 int  required_sum = 0;
+
+char *progname = NULL;
 
 enum item_type {
     ITEM_TYPE_STRING,
@@ -37,8 +51,7 @@ enum item_type {
 };
 typedef enum item_type item_type_t;
 
-//item_type_t item_mode = ITEM_TYPE_STRING;
-item_type_t item_mode = ITEM_TYPE_INT;
+item_type_t item_mode = ITEM_TYPE_STRING;
 
 #define ITEM_IS_STRING (item_mode == ITEM_TYPE_STRING)
 #define ITEM_IS_INT    (item_mode == ITEM_TYPE_INT)
@@ -75,7 +88,7 @@ string_is_integer(
     return true;
 }
 
-/*
+/*************************************************************************
  * One item in the set.
  *
  * These can be either strings or intgs.
@@ -293,7 +306,7 @@ print_item(
     }
 }
 
-/*
+/*************************************************************************
  * a set of items
  */
 struct itemset {
@@ -394,6 +407,11 @@ print_itemset_nl(
     printf("\n");
 }
 
+
+/*************************************************************************
+ * power sets
+ */
+
 bool
 map_bits_to_itemset(
     unsigned int bits,
@@ -433,6 +451,32 @@ map_bits_to_itemset(
     }
 }
 
+/*
+ * From:
+ * https://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
+ */
+int
+count_bits(
+    unsigned int v
+) {
+    unsigned int c;
+    static const unsigned int B[] = {
+        0x55555555,   // 01010101 01010101 01010101 01010101
+        0x33333333,   // 00110011 00110011 00110011 00110011
+        0x0F0F0F0F,   // 00001111 00001111 00001111 00001111
+        0x00FF00FF,   // 00000000 11111111 00000000 11111111
+        0x0000FFFF    // 00000000 00000000 11111111 11111111
+    };
+
+    c = v - ((v >> 1) & B[0]);
+    c = ((c >>  2) & B[1]) + (c & B[1]);
+    c = ((c >>  4) + c) & B[2];
+    c = ((c >>  8) + c) & B[3];
+    c = ((c >> 16) + c) & B[4];
+
+    return (int)c;
+}
+
 void
 print_powerset(
     itemset_t *iset
@@ -444,6 +488,12 @@ print_powerset(
     unsigned int bits;
 
     for (bits = bits_start; bits < bits_stop; bits++) {
+        if (use_item_limit) {
+            if (count_bits(bits) > max_items) {
+                continue;
+            }
+        }
+
         if (map_bits_to_itemset(bits, iset, subset)) {
             print_itemset_nl(subset);
         }
@@ -453,16 +503,109 @@ print_powerset(
 }
 
 
+/*************************************************************************
+ * main program / option parsing
+ */
+
+#define NEXT_ARG \
+    do {         \
+        argc--;  \
+        argv++;  \
+    } while(0)
+
+#define REQUIRE_ADDITIONAL_ARG(argname)                  \
+    if (argc < 1) {                                      \
+        printf("option \"-%s\" requires a parameter\n",  \
+               argname);                                 \
+        return false;                                    \
+    }
+
+#define REQUIRE_ADDITIONAL_INT_ARG(argname)              \
+    REQUIRE_ADDITIONAL_ARG(argname);                     \
+    if (!string_is_integer(*argv)) {                     \
+        printf("option \"-%s\" expects an integer\n",    \
+               argname);                                 \
+        return false;                                    \
+    }
+
+bool
+parse_options(
+    int   *argcp,
+    char **argvp[]
+) {
+    int    argc = *argcp;
+    char **argv = *argvp;
+
+    /* move past the program name */
+    NEXT_ARG;
+
+    while ((argc > 0)) {
+        char *arg = *argv;
+
+        /* printf("argc = %d, *arg = \"%s\"\n", argc, arg); */
+
+        if ('-' == arg[0]) {
+            NEXT_ARG;
+
+            switch (arg[1]) {
+            case 'a':
+                print_array_format = true;
+                break;
+
+            case 'E':
+                print_empty_set = false;
+                break;
+
+            case 'm':
+                REQUIRE_ADDITIONAL_INT_ARG("m");
+                use_item_limit = true;
+                max_items = atoi(*argv);
+                if (max_items > MAX_ITEM_LIMIT) {
+                    printf("Only item limits up to %d are supported",
+                           MAX_ITEM_LIMIT);
+                    return false;
+                }
+                NEXT_ARG;
+                break;
+
+            case 's':
+                REQUIRE_ADDITIONAL_INT_ARG("s");
+                use_sum_filter = true;
+                required_sum = atoi(*argv);
+                item_mode = ITEM_TYPE_INT;
+                NEXT_ARG;
+                break;
+
+            default:
+                printf("bad arg: \"%s\"\n", arg);
+                return false;
+            }
+        } else {
+            break;
+        }
+    }
+
+    *argcp = argc;
+    *argvp = argv;
+
+    return true;
+}
+
 int
 main(
     int argc,
     char *argv[]
 ) {
-    /* move past the program name */
-    argc--;
-    argv++;
+    itemset_t *iset = NULL;
 
-    itemset_t *iset = create_itemset_argv(argc, argv);
+    progname = argv[0];
+
+    if (!parse_options(&argc, &argv)) {
+        printf("error parsing options");
+        return EXIT_FAILURE;
+    }
+
+    iset = create_itemset_argv(argc, argv);
     if (NULL == iset) {
         return EXIT_FAILURE;
     }

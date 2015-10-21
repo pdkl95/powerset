@@ -31,7 +31,7 @@ ifeq ($(CC), gcc)
 endif
 
 # comment this line to fix "stdbool.h" errors
-CPPFLAGS += -DHAVE_STDBOOL
+CPPFLAGS += -DHAVE_STDBOOL_H
 
 # comment this line to fix "_Bool" errors
 CPPFLAGS += -DHAVE__BOOL

@@ -169,13 +169,10 @@ sorted_matching_sets()
     unsorted_matching_sets "$@" | sort -n
 }
 
-subset_sum_output() {
-    if $skip_final_sort ; then
-        unsorted_matching_sets "$@"
-    else
-        sorted_matching_sets "$@"
-    fi
-}
+if $skip_final_sort ; then
+    unsorted_matching_sets "$@"
+else
+    sorted_matching_sets "$@"
+fi
 
-subset_sum_output "$@"
 

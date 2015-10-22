@@ -31,12 +31,25 @@ Options
 
   * `-a`
 
-    Outputs subsets in an arrayh format (`[1,2,3]`) instead
+    Outputs subsets in an array format (`[1,2,3]`) instead
     of a simple space-separated list (`1 2 3`).
+
+  * `-j`
+
+    Similar to `-a`, with commas and a wrapping array added
+    making the output valid JSON.
 
   * `-E`
 
     Skips the empty set, which is normally output as a blank line.
+
+  * `-h`, `--help`
+
+    Show this options description.
+
+  * `-V`, `--version`
+
+    Show the program version
 
 Example
 -------

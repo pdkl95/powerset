@@ -1,3 +1,21 @@
+/***************************************************************************
+ * powerset.c
+ *
+ * Powerset is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Powerset is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with powerset.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ ***************************************************************************/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -33,9 +51,16 @@ typedef bool _Bool;
 # define MAX_ITEM_LIMIT 31
 #endif
 
+#define JSON_INDENT "  "
+
+#define PROGRAM_VERSION "1.0.0"
+#define PROGRAM_AUTHOR  "Brent Sanders"
+#define COPYRIGHT_YEAR  "2015"
+
 /* options */
 bool print_empty_set    = true;
 bool print_array_format = false;
+bool print_json_format  = false;
 bool use_item_limit     = false;
 bool use_sum_filter     = false;
 
@@ -379,6 +404,10 @@ print_itemset(
     int i;
 
     if (print_array_format) {
+        if (print_json_format) {
+            printf("%s", JSON_INDENT);
+        }
+
         printf("[");
     }
 
@@ -398,15 +427,6 @@ print_itemset(
         printf("]");
     }
 }
-
-void
-print_itemset_nl(
-    itemset_t *iset
-) {
-    print_itemset(iset);
-    printf("\n");
-}
-
 
 /*************************************************************************
  * power sets
@@ -485,7 +505,12 @@ print_powerset(
 
     unsigned int bits_start = print_empty_set ? 0 : 1;
     unsigned int bits_stop  = 1 << iset->num_items;
+    unsigned int bits_last  = bits_stop - 1;
     unsigned int bits;
+
+    if (print_json_format) {
+        printf("[\n");
+    }
 
     for (bits = bits_start; bits < bits_stop; bits++) {
         if (use_item_limit) {
@@ -495,8 +520,18 @@ print_powerset(
         }
 
         if (map_bits_to_itemset(bits, iset, subset)) {
-            print_itemset_nl(subset);
+            print_itemset(subset);
+
+            if (print_json_format && (bits < bits_last)) {
+                printf(",");
+            }
+
+            printf("\n");
         }
+    }
+
+    if (print_json_format) {
+        printf("]\n");
     }
 
     destroy_itemset(subset);
@@ -506,6 +541,48 @@ print_powerset(
 /*************************************************************************
  * main program / option parsing
  */
+
+void
+show_usage(
+    void
+) {
+    printf("usage: %s [options] <item1> [<item2> [...]]\n",
+           progname);
+}
+
+void
+show_help(
+    void
+) {
+    show_usage();
+
+    printf(
+        "\n"
+        "OPTIONS\n"
+        "  -m <INTEGER>   Sets the maximum number of items allowed in any subset\n"
+        "  -s <INTEGER>   Set the sum filter's required value\n"
+        "\n"
+        "  -a             Formats the output as an array \"[1, 2, 3]\"\n"
+        "  -j             Similar to -a, but the output is valid JSON\n"
+        "  -E             Skips the blank line representing the empty set\n"
+        "\n"
+        "  -h, --help     Show this help text\n"
+        "  -V, --verison  Show the program version\n"
+    );
+}
+
+void
+show_version(
+    void
+) {
+    printf("powerset %s\n", PROGRAM_VERSION);
+    printf("Copyright (C) %s %s\n", COPYRIGHT_YEAR, PROGRAM_AUTHOR);
+    printf(
+        "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n"
+        "This is free software: you are free to change and redistribute it.\n"
+        "There is NO WARRANTY, to the extent permitted by law.\n"
+    );
+}
 
 #define NEXT_ARG \
     do {         \
@@ -548,8 +625,34 @@ parse_options(
             NEXT_ARG;
 
             switch (arg[1]) {
+            case '-':
+                if (0 == strcmp(arg, "--help")) {
+                    show_help();
+                    exit(0);
+                } else if (0 == strcmp(arg, "--version")) {
+                    show_version();
+                    exit(0);
+                } else {
+                    printf("unknown long option \"%s\"\n", arg);
+                    return false;                    
+                }
+                break;
+
+            case 'h':
+                show_help();
+                exit(0);
+
+            case 'V':
+                show_version();
+                exit(0);
+
             case 'a':
                 print_array_format = true;
+                break;
+
+            case 'j':
+                print_array_format = true;
+                print_json_format = true;
                 break;
 
             case 'E':
@@ -577,7 +680,7 @@ parse_options(
                 break;
 
             default:
-                printf("bad arg: \"%s\"\n", arg);
+                printf("unknown option \"%s\"\n", arg);
                 return false;
             }
         } else {
@@ -600,8 +703,13 @@ main(
 
     progname = argv[0];
 
+    if (argc < 2) {
+        show_usage();
+        return EXIT_FAILURE;
+    }
+
     if (!parse_options(&argc, &argv)) {
-        printf("error parsing options");
+        printf("error parsing options\n");
         return EXIT_FAILURE;
     }
 
@@ -609,9 +717,6 @@ main(
     if (NULL == iset) {
         return EXIT_FAILURE;
     }
-
-    /* printf("Initial Array: "); */
-    /* print_itemset_nl(iset); */
 
     print_powerset(iset);
 
